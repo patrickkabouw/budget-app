@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Euro Budget Cloud - Ultimate</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 700px; margin: auto; padding: 20px; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        .tab-menu { display: flex; margin-bottom: 20px; gap: 10px; }
+        .tab-btn { flex: 1; padding: 12px; cursor: pointer; border: none; background: #dfe4ea; border-radius: 8px; font-weight: bold; transition: 0.3s; }
+        .tab-btn.active { background: #2196F3; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .form-group { background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #eee; }
+        input, select, button { margin: 8px 0; padding: 12px; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; }
+        .save-btn { background: #2196F3; color: white; border: none; font-weight: bold; cursor: pointer; }
+        
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; background: white; }
+        .history-info { display: flex; flex-direction: column; }
+        .history-date { font-size: 0.8rem; color: #777; }
+        .action-btns { display: flex; gap: 8px; }
+        .delete-btn { background: #ff4757; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; }
+        
+        #balance-display { text-align: center; font-size: 1.8rem; margin: 15px 0; font-weight: bold; }
+        .type-income { color: #2ed573; font-weight: bold; }
+        .type-expense { color: #ff4757; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="tab-menu">
+        <button class="tab-btn active" onclick="openTab('tracker')">Dashboard</button>
+        <button class="tab-btn" onclick="openTab('history')">History</button>
+    </div>
+
+    <div id="tracker" class="tab-content active">
+        <div class="form-group">
+            <h2 id="form-title" style="margin-top:0;">📝 Cloud Entry</h2>
+            <input type="text" id="name" placeholder="Description (e.g. Pizza, Rent)">
+            <input type="number" id="amount" placeholder="Amount (€)">
+            <select id="type">
+                <option value="income">Income (+)</option>
+                <option value="expense">Expense (-)</option>
+            </select>
+            <button class="save-btn" id="main-button" onclick="handleSave()">Save to Cloud</button>
+        </div>
+
+        <div id="balance-display">Balance: <span id="balance">0.00</span>€</div>
+        <canvas id="myChart" height="250"></canvas>
+    </div>
+
+    <div id="history" class="tab-content">
+        <h2>📅 History (All Devices)</h2>
+        <div id="history-list">Loading from cloud...</div>
+    </div>
+</div>
+
+<script>
+    // CONNECTION TO YOUR SUPABASE
+    const SUPABASE_URL = 'https://draqkbpyxtlwpxvadstp.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyYXFrYnB5eHRsd3B4dmFkc3RwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMTI5MjMsImV4cCI6MjA5Mzg4ODkyM30.b8JcFSrWMB34Xgop6Zs2HShbaRyO1mSr59Wafqc_wf4';
+    
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let transactions = [];
+    let myChart;
+
+    // Load data when page opens
+    async function fetchFromCloud() {
+        const { data, error } = await supabaseClient
+            .from('transactions')
+            .select('*')
+            .order('created_at', { ascending: true });
+        
+        if (error) {
+            console.error(error);
+            document.getElementById('history-list').innerText = "Error connecting to Supabase.";
+        } else {
+            transactions = data;
+            refreshUI();
+        }
+    }
+
+    async function handleSave() {
+        const nameInput = document.getElementById('name');
+        const amountInput = document.getElementById('amount');
+        const type = document.getElementById('type').value;
+
+        const name = nameInput.value;
+        const amount = parseFloat(amountInput.value);
+
+        if (!name || isNaN(amount)) return alert("Please enter description and amount!");
+
+        const dateStr = new Date().toLocaleDateString('de-DE');
+
+        // Send to Supabase
+        const { error } = await supabaseClient
+            .from('transactions')
+            .insert([{ name, amount, type, date: dateStr }]);
+
+        if (error) {
+            alert("Error saving: " + error.message);
+        } else {
+            nameInput.value = '';
+            amountInput.value = '';
+            fetchFromCloud(); // Refresh list
+        }
+    }
+
+    async function deleteEntry(id) {
+        if(confirm("Delete this entry forever?")) {
+            await supabaseClient.from('transactions').delete().eq('id', id);
+            fetchFromCloud();
+        }
+    }
+
+    function refreshUI() {
+        let totalInc = 0; 
+        let totalExp = 0;
+        
+        transactions.forEach(t => {
+            if(t.type === 'income') totalInc += t.amount;
+            else totalExp += t.amount;
+        });
+
+        document.getElementById('balance').innerText = (totalInc - totalExp).toFixed(2);
+        renderHistory();
+        updateChart(totalInc, totalExp);
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('history-list');
+        list.innerHTML = '';
+        [...transactions].reverse().forEach(t => {
+            list.innerHTML += `
+                <div class="history-item">
+                    <div class="history-info">
+                        <strong>${t.name}</strong>
+                        <span class="history-date">${t.date}</span>
+                    </div>
+                    <div class="action-btns">
+                        <span class="${t.type === 'income' ? 'type-income' : 'type-expense'}">
+                            ${t.type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}€
+                        </span>
+                        <button class="delete-btn" onclick="deleteEntry(${t.id})">X</button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function updateChart(inc, exp) {
+        const ctx = document.getElementById('myChart').getContext('2d');
+        if (myChart) myChart.destroy();
+
+        // Hover insights: list individual items in the tooltip
+        const incomeList = transactions.filter(t => t.type === 'income').map(t => `${t.name}: ${t.amount}€`);
+        const expenseList = transactions.filter(t => t.type === 'expense').map(t => `${t.name}: ${t.amount}€`);
+
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Total Income', 'Total Expenses'],
+                datasets: [{
+                    data: [inc, exp],
+                    backgroundColor: ['#2ed573', '#ff4757'],
+                    borderRadius: 10
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                return context[0].dataIndex === 0 ? incomeList : expenseList;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    function openTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    // Initial Load from Cloud
+    fetchFromCloud();
+</script>
+
+</body>
+</html>
