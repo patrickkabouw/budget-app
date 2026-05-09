@@ -1,65 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Euro Budget Cloud</title>
+    <meta charset="UTF-8">
+    <title>Euro Budget Pro</title>
     
-    <!-- 1. THE LOGO & COLOR (This makes it look like a real app) -->
+    <!-- APP LOGO & MOBILE OPTIMIZATION -->
     <link rel="icon" href="https://fav.farm/💶">
     <link rel="apple-touch-icon" href="https://fav.farm/💶">
     <meta name="theme-color" content="#2196F3">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
+    <!-- EXTERNAL LIBRARIES (Chart, Database, and Scanner) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     
     <style>
-        body { font-family: 'Segoe UI', sans-serif; max-width: 700px; margin: auto; padding: 20px; background: #f0f2f5; color: #333; }
-        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 15px; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        
+        /* Menu Tabs */
         .tab-menu { display: flex; margin-bottom: 20px; gap: 10px; }
-        .tab-btn { flex: 1; padding: 12px; cursor: pointer; border: none; background: #dfe4ea; border-radius: 8px; font-weight: bold; }
+        .tab-btn { flex: 1; padding: 14px; cursor: pointer; border: none; background: #dfe4ea; border-radius: 12px; font-weight: bold; font-size: 1rem; }
         .tab-btn.active { background: #2196F3; color: white; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .form-group { background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #eee; }
-        input, select, button { margin: 8px 0; padding: 12px; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
-        .save-btn { background: #2196F3; color: white; border: none; font-weight: bold; cursor: pointer; height: 50px; }
-        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; background: white; }
-        .delete-btn { background: #ff4757; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; }
-        #balance-display { text-align: center; font-size: 2rem; margin: 15px 0; font-weight: bold; }
-        .type-income { color: #2ed573; font-weight: bold; }
-        .type-expense { color: #ff4757; font-weight: bold; }
+
+        /* Form Styling */
+        .section { background: #f8f9fa; padding: 15px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #e9ecef; }
+        h3 { margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        input, select, button { margin: 8px 0; padding: 14px; width: 100%; box-sizing: border-box; border-radius: 10px; border: 1px solid #ddd; font-size: 1rem; }
+        
+        .save-btn { background: #2196F3; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .scan-label { background: #6c5ce7; color: white; padding: 14px; border-radius: 10px; display: block; text-align: center; cursor: pointer; font-weight: bold; }
+        #scanner { display: none; } /* Hidden file input */
+        
+        /* Balance & List */
+        #balance-display { text-align: center; font-size: 2.5rem; margin: 10px 0; font-weight: 800; color: #2c3e50; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; }
+        .delete-btn { background: #ff4757; color: white; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+        .type-income { color: #2ecc71; font-weight: bold; }
+        .type-expense { color: #e74c3c; font-weight: bold; }
+        #scan-status { font-size: 0.85rem; color: #666; text-align: center; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div class="tab-menu">
-        <button class="tab-btn active" onclick="openTab('tracker')">Dashboard</button>
+        <button class="tab-btn active" onclick="openTab('tracker')">Add</button>
         <button class="tab-btn" onclick="openTab('history')">History</button>
     </div>
 
     <div id="tracker" class="tab-content active">
-        <div class="form-group">
-            <h2 style="margin:0 0 10px 0;">💶 Cloud Budget</h2>
-            <input type="text" id="name" placeholder="Description">
-            <input type="number" id="amount" placeholder="Amount (€)" inputmode="decimal">
-            <select id="type">
-                <option value="income">Income (+)</option>
-                <option value="expense" selected>Expense (-)</option>
-            </select>
-            <button class="save-btn" onclick="handleSave()">Save to Cloud</button>
+        <!-- SCANNER SECTION -->
+        <div class="section" style="border-left: 5px solid #6c5ce7;">
+            <h3>📸 Scan Invoice</h3>
+            <label for="scanner" class="scan-label">Open Camera to Scan</label>
+            <input type="file" id="scanner" accept="image/*" capture="environment" onchange="scanImage(this)">
+            <p id="scan-status">Ready to scan...</p>
         </div>
+
+        <!-- MANUAL ENTRY SECTION -->
+        <div class="section">
+            <h3>📝 Manual Entry</h3>
+            <input type="text" id="name" placeholder="What did you buy?">
+            <input type="number" id="amount" placeholder="0.00" step="0.01" inputmode="decimal">
+            <select id="type">
+                <option value="expense" selected>Expense (-)</option>
+                <option value="income">Income (+)</option>
+            </select>
+            <button class="save-btn" onclick="handleSave()">Save to Cloud ☁️</button>
+        </div>
+
         <div id="balance-display"><span id="balance">0.00</span>€</div>
-        <canvas id="myChart" height="250"></canvas>
+        <canvas id="myChart" height="200"></canvas>
     </div>
 
     <div id="history" class="tab-content">
         <h2>📅 History</h2>
-        <div id="history-list">Connecting...</div>
+        <div id="history-list">Connecting to cloud...</div>
     </div>
 </div>
 
 <script>
+    // --- DATABASE CONFIGURATION ---
     const SUPABASE_URL = 'https://draqkbpyxtlwpxvadstp.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyYXFrYnB5eHRsd3B4dmFkc3RwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMTI5MjMsImV4cCI6MjA5Mzg4ODkyM30.b8JcFSrWMB34Xgop6Zs2HShbaRyO1mSr59Wafqc_wf4';
     
@@ -67,6 +92,34 @@
     let transactions = [];
     let myChart;
 
+    // --- SCANNER LOGIC (OCR) ---
+    async function scanImage(input) {
+        const status = document.getElementById('scan-status');
+        if (!input.files || !input.files[0]) return;
+
+        status.innerText = "🌀 Reading receipt... (wait 5s)";
+        
+        try {
+            const result = await Tesseract.recognize(input.files[0], 'eng');
+            const text = result.data.text;
+            
+            // Search for price patterns (e.g., 12.99)
+            const prices = text.match(/\d+\.\d{2}/g); 
+            
+            if (prices) {
+                const maxPrice = Math.max(...prices.map(p => parseFloat(p)));
+                document.getElementById('amount').value = maxPrice;
+                document.getElementById('name').value = "Scanned Receipt";
+                status.innerText = "✅ Found: " + maxPrice + "€";
+            } else {
+                status.innerText = "❌ No price found. Try again.";
+            }
+        } catch (e) {
+            status.innerText = "⚠️ Scan Error. Try manual entry.";
+        }
+    }
+
+    // --- DATA LOGIC ---
     async function fetchFromCloud() {
         const { data, error } = await supabaseClient.from('transactions').select('*').order('created_at', { ascending: true });
         if (!error) { transactions = data; refreshUI(); }
@@ -76,16 +129,19 @@
         const name = document.getElementById('name').value;
         const amount = parseFloat(document.getElementById('amount').value);
         const type = document.getElementById('type').value;
-        if (!name || isNaN(amount)) return;
+        if (!name || isNaN(amount)) return alert("Fill in name and amount!");
 
         await supabaseClient.from('transactions').insert([{ name, amount, type, date: new Date().toLocaleDateString('de-DE') }]);
+        
+        // Clear fields
         document.getElementById('name').value = '';
         document.getElementById('amount').value = '';
+        document.getElementById('scan-status').innerText = "Ready to scan...";
         fetchFromCloud();
     }
 
     async function deleteEntry(id) {
-        if(confirm("Delete?")) {
+        if(confirm("Delete permanently?")) {
             await supabaseClient.from('transactions').delete().eq('id', id);
             fetchFromCloud();
         }
@@ -118,8 +174,9 @@
             type: 'doughnut',
             data: {
                 labels: ['Income', 'Expenses'],
-                datasets: [{ data: [inc, exp], backgroundColor: ['#2ed573', '#ff4757'] }]
-            }
+                datasets: [{ data: [inc, exp], backgroundColor: ['#2ecc71', '#e74c3c'], borderWidth: 0 }]
+            },
+            options: { cutout: '70%', plugins: { legend: { position: 'bottom' } } }
         });
     }
 
